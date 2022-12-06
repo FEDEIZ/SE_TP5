@@ -20,7 +20,7 @@
 */
 
 void test_initial_hour_invalid(void){
-    static const uint8_t EXPECTED = {0,0,0,0,0,0}; 
+    static const uint8_t EXPECTED[] = {0,0,0,0,0,0}; 
     clock_t clock = createClock(5);
     uint8_t hour[6];
     TEST_ASSERT_FALSE(getTimeClock(clock, hour, 6));
