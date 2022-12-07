@@ -3,29 +3,38 @@
 
 #define TICKS_PER_SECOND 5
 
-clock_t clock;
+
 /*
 
 
 3) Configurar la biblioteca, ajustar la hora (con valores incorrectos) tiene devolver un error y al consultar la hora tiene que ser invalida.
 
 
-7) Configurar la hora de la alarma (con valores correctos) y revisar si la guarda.
 8) Configurar la hora de la alarma (con valores incorrectos) y revisar si la rechaza.
-9) Configurar la hora de la alarma (con valores correctos) y revisar si la queda activada.
-10) Si la alarma esta activa y la desactivo, queda desactivada, pero no cambia la hora.
+
+
 11) Si la alarma esta desactivada y la activo, queda activa, pero no cambia la hora.
-12) Si la alarma esta activa, y la hora del reloj coincide con la hora de la alarma, entonces suena.
+
 14) Si la se activo, y las pospongo n minutos, vuelve a sonar n minutos
 15) Si la se activo, y la cancelo, al día siguiente, vuelve a sonar
 16) Si alarma se activa y pasan 23:59:59 no debe volver a activarse, pero si pasa un segundo mas entonces si se debe volver a activar
-17) Si la alarma esta inactiva no debe sonar cuando la hora del reloj coincida con la hora de la alarma
+
+
+AGREGAR: *) cuando aranca el reloj la alarma esta en false! -> La agregue en la primera prueba
 */
+
+clock_t clock;
+bool alarm_state;
+
+void alarmEventHandler(clock_t clock, bool state){ // funcion de callback para disparar alarma
+    alarm_state = state;
+}
 
 void setUp(void){  // iniciamos un solo reloj para todas las pruebas. Nombre reservado para ceedling. Se ejecuta antes de cada prueba
     static const uint8_t INITIAL[] = {1,2,3,4};
-    clock = createClock(TICKS_PER_SECOND);
+    clock = createClock(TICKS_PER_SECOND, alarmEventHandler);
     configClock(clock, INITIAL, sizeof(INITIAL));
+    alarm_state = false; // antes de cada prueba la alarma no esta disparada
 }
 
 void simulateSeconds(int seconds){
@@ -34,14 +43,18 @@ void simulateSeconds(int seconds){
     }
 }
 
+
+
 // 1) Configurar la biblioteca, consultar la hora y tiene que ser invalida.
 
 void test_initial_hour_invalid(void){
     static const uint8_t EXPECTED[] = {0,0,0,0,0,0}; 
     uint8_t hour[6];
-    clock = createClock(TICKS_PER_SECOND); // necesitamos que el reloj NO este en hora!
+    uint8_t alarm[4];
+    clock = createClock(TICKS_PER_SECOND, alarmEventHandler); // necesitamos que el reloj NO este en hora!
     TEST_ASSERT_FALSE(getTimeClock(clock, hour, sizeof(hour)));
     TEST_ASSERT_EQUAL_UINT8_ARRAY(EXPECTED,hour, sizeof(EXPECTED));
+    TEST_ASSERT_FALSE(clockGetAlarm(clock, alarm, sizeof(alarm))); // me aseguro que la alarma esta desactivada cuando arranca
 }
 
 // 2) Configurar la biblioteca, ajustar la hora (con valores correctos), consultar la hora y tiene que ser valida.
@@ -110,3 +123,54 @@ void test_ten_hour_elapsed(void){
     TEST_ASSERT_EQUAL_UINT8_ARRAY(EXPECTED, hour, sizeof(EXPECTED));
 }
 
+// 7) Configurar la hora de la alarma (con valores correctos) y revisar si la guarda.
+// 9) Configurar la hora de la alarma (con valores correctos) y revisar si la queda activada.
+
+void test_setup_and_get_alarm(void){
+    static const uint8_t ALARM[] = {1,2,3,5};
+    uint8_t hour[4];
+    clockSetUpAlarm(clock, ALARM, sizeof(ALARM));
+    TEST_ASSERT_TRUE(clockGetAlarm(clock, hour, sizeof(hour)));
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(ALARM, hour, sizeof(ALARM));
+
+}
+
+// 10) Si la alarma esta activa y la desactivo, queda desactivada, pero no cambia la hora.
+
+void test_setup_and_disable_alarm(void){
+    static const uint8_t ALARM[] = {1,2,3,5};
+    uint8_t hour[4];
+    clockSetUpAlarm(clock, ALARM, sizeof(ALARM));
+    TEST_ASSERT_FALSE(clockToggleAlarm(clock));
+    TEST_ASSERT_FALSE(clockGetAlarm(clock, hour, sizeof(hour))); // ahora debe devolver falso por estar desactivada
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(ALARM, hour, sizeof(ALARM));
+
+}
+
+// 12) Si la alarma esta activa, y la hora del reloj coincide con la hora de la alarma, entonces suena.
+
+void test_setup_and_fire_alarm(void){
+    static const uint8_t ALARM[] = {1,2,3,5};
+    
+    clockSetUpAlarm(clock, ALARM, sizeof(ALARM));
+    simulateSeconds(60); // tiempo que falta para que suene la alarma
+    TEST_ASSERT_TRUE(alarm_state);
+    alarm_state = false;
+    simulateSeconds(10); // si pasan mas de 1 segundo despues de la hora exacta de la alarma, no deberia estar disparada
+    // TEST_ASSERT_FALSE(alarm_state);
+    // simulateSeconds(86329); // si pasan 24hr menos 1 segundo no deberia estar disparada
+    // TEST_ASSERT_FALSE(alarm_state);
+    // simulateSeconds(1); // si pasan 24hrs deberia dispararse
+    // TEST_ASSERT_TRUE(alarm_state);
+}
+
+// 17) Si la alarma esta inactiva no debe sonar cuando la hora del reloj coincida con la hora de la alarma
+
+void test_disable_alarm(void){
+    static const uint8_t ALARM[] = {1,2,3,5};
+    
+    clockSetUpAlarm(clock, ALARM, sizeof(ALARM));
+    clockToggleAlarm(clock);
+    simulateSeconds(60); // tiempo que falta para que suene la alarma
+    TEST_ASSERT_FALSE(alarm_state);
+}
